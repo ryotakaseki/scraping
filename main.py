@@ -25,16 +25,85 @@ def _parse_dl_tags(section_div):
                 details[key] = value
     return details
 
+def _extract_sections_from_external(soup):
+    """
+    外部サイトの求人詳細ページから、代表的な見出しに基づいて
+    『仕事内容』『対象となる方』をヒューリスティックに抽出する。
+    """
+    result = {}
+
+    def norm(text):
+        return " ".join(text.split()) if text else ""
+
+    # 見出し候補と抽出対象
+    targets = {
+        "仕事内容": ["仕事内容", "業務内容", "仕事の内容", "業務詳細", "業務内容・仕事の特色"],
+        "対象となる方": ["対象となる方", "応募資格", "求める人物像", "求める人材", "応募要件", "必須条件"],
+    }
+
+    # 探索する見出しタグ
+    heading_tags = ["h1", "h2", "h3", "h4", "dt", "th", "strong", "p", "div"]
+
+    for out_key, keywords in targets.items():
+        if out_key in result:
+            continue
+        # 見出しに該当する要素を探索
+        heading = None
+        for tag in heading_tags:
+            heading = soup.find(tag, string=lambda s: s and any(k in s for k in keywords))
+            if heading:
+                break
+        if not heading:
+            continue
+
+        # 見出しの直後のコンテンツっぽい要素を探索
+        # 段落/リスト/汎用ブロックの順で探す
+        content = None
+        for finder in [
+            lambda h: h.find_next(["p", "ul", "ol", "section"]),
+            lambda h: h.find_parent().find_next(["p", "ul", "ol", "section"]) if h.find_parent() else None,
+            lambda h: h.find_next("div"),
+        ]:
+            content = finder(heading)
+            if content and norm(content.get_text(strip=True)):
+                break
+
+        if content:
+            text = content.get_text(separator=" ", strip=True)
+            result[out_key] = norm(text)
+
+    return result
+
 def get_job_details(detail_url, site_config, job_card):
     """
     詳細ページから情報を取得する
     """
     if site_config['BASE_URL'] == "https://xn--pckua2a7gp15o89zb.com":
-        # kyujinboxの場合は、一覧ページから情報を取得
+        # kyujinbox: 一覧カードから基本項目を取得 + 外部詳細ページをヒューリスティックに解析
         details = {}
         for key, target in site_config['EXTRACTION_TARGETS'].items():
-            elem = job_card.find(target["tag"], class_=target["class"])
-            details[key] = elem.text.strip() if elem else "N/A"
+            cls = target.get("class")
+            if isinstance(cls, str) and " " in cls:
+                cls = cls.split()
+            elem = job_card.find(target["tag"], class_=cls)
+            details[key] = elem.get_text(separator=" ", strip=True) if elem else "N/A"
+
+        # 掲載元（カードに表示されていれば）
+        source_elem = job_card.find("div", class_="p-result_source")
+        if source_elem:
+            details["掲載元"] = source_elem.get_text(separator=" ", strip=True)
+
+        # 外部詳細ページから 仕事内容/対象となる方 を抽出（可能な範囲で）
+        soup_ext = utils.get_soup(detail_url)
+        if soup_ext:
+            try:
+                ext_details = _extract_sections_from_external(soup_ext)
+                details.update(ext_details)
+            except Exception as e:
+                logging.warning(f"外部詳細ページの解析に失敗: {e} URL: {detail_url}")
+        else:
+            logging.info(f"外部詳細ページの取得をスキップ/失敗しました: {detail_url}")
+
         return details
 
     soup = utils.get_soup(detail_url)
@@ -47,8 +116,11 @@ def get_job_details(detail_url, site_config, job_card):
     for key, target in site_config['EXTRACTION_TARGETS'].items():
         if "tag" in target and "class" in target:
             # 通常のタグとクラスによる抽出
-            elem = soup.find(target["tag"], class_=target["class"])
-            details[key] = elem.text.strip() if elem else "N/A"
+            cls = target.get("class")
+            if isinstance(cls, str) and " " in cls:
+                cls = cls.split()
+            elem = soup.find(target["tag"], class_=cls)
+            details[key] = elem.get_text(separator=" ", strip=True) if elem else "N/A"
         elif "div_class" in target:
             # dlタグを解析するセクション
             section_div = soup.find("div", class_=target["div_class"])
@@ -184,6 +256,8 @@ def main(site, start_page=1, resume=False):
 
             job_details = get_job_details(detail_url, site_config, job_card)
             if job_details:
+                # 追跡用に求人URLも保存
+                job_details.setdefault("求人URL", detail_url)
                 all_job_details.append(job_details)
             else:
                 logging.warning(f"[{i+1}/{len(job_cards)}] 詳細ページ ({detail_url}) から求人情報を取得できませんでした。スキップします。")

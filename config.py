@@ -27,7 +27,7 @@ SITE_CONFIGS = {
             "勤務地": {"tag": "li", "class": "p-result_area"},
             "給与": {"tag": "li", "class": "p-result_pay"},
             "雇用形態": {"tag": "li", "class": "p-result_employType"},
-            "求人詳細": {"tag": "div", "class": "p-preview_body s-preview-body"}
+            "求人詳細": {"tag": "p", "class": "p-result_lines s-result_switch_snipet is-hide"}
         },
     },
 }
@@ -36,4 +36,4 @@ SITE_CONFIGS = {
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 MIN_INTERVAL = 1
 MAX_INTERVAL = 5
-MAX_ITEMS = 50
+MAX_ITEMS = 3
