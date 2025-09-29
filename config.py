@@ -37,3 +37,6 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 MIN_INTERVAL = 1
 MAX_INTERVAL = 5
 MAX_ITEMS = 3
+
+# ログ出力のデフォルトレベル
+LOG_LEVEL = "INFO"
