@@ -15,7 +15,8 @@ def get_soup(url):
         time.sleep(sleep_time)
         
         res = requests.get(url, headers=config.HEADERS, timeout=10)
-        res.encoding = res.apparent_encoding
+        # res.encoding = res.apparent_encoding
+        res.encoding = 'utf-8'
         res.raise_for_status()
         return BeautifulSoup(res.text, "html.parser")
     except requests.RequestException as e:
