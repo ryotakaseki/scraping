@@ -1,20 +1,27 @@
+"""メインのスクレイピング処理を定義するモジュール。"""
 
-import csv
-import os
-import logging
-from datetime import datetime
-from urllib.parse import urljoin
+from __future__ import annotations
+
 import argparse
-import config
-import utils
-import logging_config
+import csv
 import glob
+import logging
+import math
+import os
+import re
+from datetime import datetime
+from typing import Dict, List, Optional
+from urllib.parse import urljoin
 
-def _parse_dl_tags(section_div):
-    """
-    dl, dt, ddタグのセットを解析して辞書を返す
-    """
-    details = {}
+import config
+import logging_config
+import utils
+
+
+def _parse_dl_tags(section_div) -> Dict[str, str]:
+    """dlタグ配下の情報を辞書形式に整形する。"""
+
+    details: Dict[str, str] = {}
     if section_div:
         for dl in section_div.find_all("dl"):
             dt = dl.find("dt")
@@ -23,6 +30,15 @@ def _parse_dl_tags(section_div):
                 key = dt.text.strip()
                 value = " ".join(dd.text.strip().split()) if dd else "N/A"
                 details[key] = value
+                logging.debug(
+                    "DLタグ解析 - key=%s value_preview=%s",
+                    key,
+                    value[:80] + ("..." if len(value) > 80 else ""),
+                )
+            else:
+                logging.debug("DLタグ解析 - dt要素が見つからないdlタグをスキップしました。")
+    else:
+        logging.debug("DLタグ解析 - 対象のセクションが見つかりませんでした。")
     return details
 
 def _extract_sections_from_external(soup):
@@ -52,8 +68,10 @@ def _extract_sections_from_external(soup):
         for tag in heading_tags:
             heading = soup.find(tag, string=lambda s: s and any(k in s for k in keywords))
             if heading:
+                logging.debug("外部詳細解析 - '%s' の見出し候補を '%s' タグで検出", out_key, tag)
                 break
         if not heading:
+            logging.debug("外部詳細解析 - '%s' に該当する見出しが見つかりませんでした。", out_key)
             continue
 
         # 見出しの直後のコンテンツっぽい要素を探索
@@ -71,27 +89,43 @@ def _extract_sections_from_external(soup):
         if content:
             text = content.get_text(separator=" ", strip=True)
             result[out_key] = norm(text)
+            logging.debug(
+                "外部詳細解析 - '%s' の内容を抽出 (プレビュー: %s)",
+                out_key,
+                text[:80] + ("..." if len(text) > 80 else ""),
+            )
+        else:
+            logging.debug("外部詳細解析 - '%s' の内容となる要素を特定できませんでした。", out_key)
 
     return result
 
-def get_job_details(detail_url, site_config, job_card):
-    """
-    詳細ページから情報を取得する
-    """
+def get_job_details(detail_url, site_config, job_card) -> Dict[str, str]:
+    """詳細ページ、もしくは一覧ページから求人情報を抽出する。"""
+
+    logging.debug("求人詳細の取得を開始 detail_url=%s", detail_url)
     if site_config['BASE_URL'] == "https://xn--pckua2a7gp15o89zb.com":
         # kyujinbox: 一覧カードから基本項目を取得 + 外部詳細ページをヒューリスティックに解析
-        details = {}
+        details: Dict[str, str] = {}
         for key, target in site_config['EXTRACTION_TARGETS'].items():
             cls = target.get("class")
             if isinstance(cls, str) and " " in cls:
                 cls = cls.split()
             elem = job_card.find(target["tag"], class_=cls)
             details[key] = elem.get_text(separator=" ", strip=True) if elem else "N/A"
+            logging.debug(
+                "求人カード解析 (kyujinbox) - key=%s value_preview=%s",
+                key,
+                details[key][:80] + ("..." if len(details[key]) > 80 else ""),
+            )
 
         # 掲載元（カードに表示されていれば）
         source_elem = job_card.find("div", class_="p-result_source")
         if source_elem:
             details["掲載元"] = source_elem.get_text(separator=" ", strip=True)
+            logging.debug(
+                "求人カード解析 (kyujinbox) - 掲載元 value_preview=%s",
+                details["掲載元"][:80] + ("..." if len(details["掲載元"]) > 80 else ""),
+            )
 
         # 外部詳細ページから 仕事内容/対象となる方 を抽出（可能な範囲で）
         soup_ext = utils.get_soup(detail_url)
@@ -99,11 +133,19 @@ def get_job_details(detail_url, site_config, job_card):
             try:
                 ext_details = _extract_sections_from_external(soup_ext)
                 details.update(ext_details)
+                logging.debug(
+                    "求人カード解析 (kyujinbox) - 外部詳細抽出結果 keys=%s",
+                    list(ext_details.keys()),
+                )
             except Exception as e:
                 logging.warning(f"外部詳細ページの解析に失敗: {e} URL: {detail_url}")
         else:
             logging.info(f"外部詳細ページの取得をスキップ/失敗しました: {detail_url}")
 
+        logging.debug(
+            "求人カード解析 (kyujinbox) - 抽出完了 keys=%s",
+            sorted(details.keys()),
+        )
         return details
 
     soup = utils.get_soup(detail_url)
@@ -111,8 +153,8 @@ def get_job_details(detail_url, site_config, job_card):
         logging.error(f"詳細ページ ({detail_url}) の取得に失敗しました。")
         return {}
 
-    details = {}
-    
+    details: Dict[str, str] = {}
+
     for key, target in site_config['EXTRACTION_TARGETS'].items():
         if "tag" in target and "class" in target:
             # 通常のタグとクラスによる抽出
@@ -121,6 +163,11 @@ def get_job_details(detail_url, site_config, job_card):
                 cls = cls.split()
             elem = soup.find(target["tag"], class_=cls)
             details[key] = elem.get_text(separator=" ", strip=True) if elem else "N/A"
+            logging.debug(
+                "求人詳細解析 - key=%s value_preview=%s",
+                key,
+                details[key][:80] + ("..." if len(details[key]) > 80 else ""),
+            )
         elif "div_class" in target:
             # dlタグを解析するセクション
             section_div = soup.find("div", class_=target["div_class"])
@@ -128,29 +175,40 @@ def get_job_details(detail_url, site_config, job_card):
         else:
             logging.warning(f"不明な抽出ターゲット形式: {key} - {target}")
 
+    logging.debug(
+        "求人詳細解析 - 抽出完了 keys=%s",
+        sorted(details.keys()),
+    )
     return details
-import math
-import re
 
-    # 省略
+def main(
+    site: str,
+    start_page: int = 1,
+    resume: bool = False,
+    log_level: Optional[str] = None,
+) -> None:
+    """求人情報をスクレイピングしてCSVに出力する。"""
 
-def main(site, start_page=1, resume=False):
-    """
-    求人情報をスクレイピングしてCSVに出力する
-    """
-    logging_config.setup_logging()
-    logging.info(f"--- {site} のスクレイピング処理を開始します ---")
+    logging_config.setup_logging(
+        log_level=log_level,
+        default_level=getattr(config, "LOG_LEVEL", None),
+    )
+    logging.info("--- %s のスクレイピング処理を開始します ---", site)
 
     if site not in config.SITE_CONFIGS:
         logging.error(f"設定ファイルにサイト '{site}' の設定が見つかりません。")
         return
 
     site_config = config.SITE_CONFIGS[site]
+    logging.debug("サイト設定: %s", site_config)
     BASE_URL = site_config["BASE_URL"]
-    
-    all_job_details = []
+
+    all_job_details: List[Dict[str, str]] = []
     page = start_page
     skip_items = 0
+
+    if config.MAX_ITEMS is not None:
+        logging.info("最大取得件数は %s 件に設定されています。", config.MAX_ITEMS)
 
     if resume:
         logging.info("再開モードで実行します。最新のCSVファイルを探しています...")
@@ -171,6 +229,7 @@ def main(site, start_page=1, resume=False):
             logging.info(f"{page}ページ目の{skip_items}件目から再開します。")
         else:
             logging.info("再開できるCSVファイルが見つかりませんでした。最初から開始します。")
+            logging.debug("再開モード - outputディレクトリ: %s", os.path.abspath(output_dir))
 
     # 最初のページで総件数を取得
     first_page_url = site_config["TARGET_URL"]
@@ -220,6 +279,7 @@ def main(site, start_page=1, resume=False):
                 target_url = f'{site_config["TARGET_URL"]}&page={page}'
 
         logging.info(f"求人一覧ページ ({target_url}) の取得を試行します。")
+        logging.debug("現在の進捗: 収集済み=%d件 ページ=%d/%d", len(all_job_details), page, last_page)
         list_soup = utils.get_soup(target_url)
         if not list_soup:
             logging.error(f"{target_url} の取得に失敗しました。このページの処理をスキップします。")
@@ -232,9 +292,15 @@ def main(site, start_page=1, resume=False):
             break
             
         logging.info(f"ページ {page} で求人カードを {len(job_cards)} 件検出しました。")
-        
+
         for i, job_card in enumerate(job_cards):
             if i < skip_items:
+                logging.debug(
+                    "再開モード - ページ%sの先頭から%s件をスキップ中 (現在%s件目)",
+                    page,
+                    skip_items,
+                    i + 1,
+                )
                 continue # スキップ
 
             if config.MAX_ITEMS is not None and len(all_job_details) >= config.MAX_ITEMS:
@@ -243,31 +309,46 @@ def main(site, start_page=1, resume=False):
 
             #広告を除外
             if "p-ad-item" in job_card.get("class", []):
+                logging.debug("広告カードを検出しスキップしました index=%d", i)
                 continue
 
             detail_link_tag = job_card.find(site_config["DETAIL_URL_TAG"], class_=site_config["DETAIL_URL_CLASS"])
             if not detail_link_tag or not detail_link_tag.has_attr('href'):
                 logging.warning(f"[{i+1}/{len(job_cards)}] 詳細ページへのリンクが見つかりませんでした。この求人カードをスキップします。")
                 continue
-            
+
             relative_url = detail_link_tag['href']
             detail_url = urljoin(BASE_URL, relative_url)
             logging.info(f"detail_url: {detail_url}")
+            logging.debug(
+                "求人カード処理 - ページ=%d index=%d/%d 相対URL=%s",
+                page,
+                i + 1,
+                len(job_cards),
+                relative_url,
+            )
 
             job_details = get_job_details(detail_url, site_config, job_card)
             if job_details:
                 # 追跡用に求人URLも保存
                 job_details.setdefault("求人URL", detail_url)
                 all_job_details.append(job_details)
+                logging.debug(
+                    "求人カード処理 - 抽出成功 件数=%d 累計=%d",
+                    len(job_details),
+                    len(all_job_details),
+                )
             else:
                 logging.warning(f"[{i+1}/{len(job_cards)}] 詳細ページ ({detail_url}) から求人情報を取得できませんでした。スキップします。")
 
         if config.MAX_ITEMS is not None and len(all_job_details) >= config.MAX_ITEMS:
+            logging.debug("最大取得件数に達したためページループを終了します。")
             break
-        
+
         # 次のページに行く前にスキップ件数をリセット
         skip_items = 0
         page += 1
+        logging.info("ページ処理完了。現在の累計取得件数: %d", len(all_job_details))
 
     if not all_job_details:
         logging.warning("取得できた求人情報がありませんでした。CSVは作成されません。")
@@ -298,9 +379,14 @@ def main(site, start_page=1, resume=False):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Webスクレイピングを実行します。')
-    parser.add_argument('site', help='スクレイピング対象のサイト名 (config.pyで定義)')
-    parser.add_argument('--start-page', type=int, default=1, help='スクレイピングを開始するページ番号')
-    parser.add_argument('--resume', action='store_true', help='前回の続きからスクレイピングを再開します')
+    parser = argparse.ArgumentParser(description="Webスクレイピングを実行します。")
+    parser.add_argument("site", help="スクレイピング対象のサイト名 (config.pyで定義)")
+    parser.add_argument("--start-page", type=int, default=1, help="スクレイピングを開始するページ番号")
+    parser.add_argument("--resume", action="store_true", help="前回の続きからスクレイピングを再開します")
+    parser.add_argument(
+        "--log-level",
+        default=None,
+        help="ログ出力レベル (例: DEBUG, INFO, WARNING)",
+    )
     args = parser.parse_args()
-    main(args.site, args.start_page, args.resume)
+    main(args.site, args.start_page, args.resume, args.log_level)
