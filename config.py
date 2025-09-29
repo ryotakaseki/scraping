@@ -37,3 +37,6 @@ HEADERS = {"User-Agent": "Mozilla/5.0"}
 MIN_INTERVAL = 1
 MAX_INTERVAL = 5
 MAX_ITEMS = 50
+
+# ログ出力レベル (logging モジュール準拠)
+LOG_LEVEL = "DEBUG"
