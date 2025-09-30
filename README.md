@@ -1,17 +1,26 @@
-# 求人情報スクレイピングツール
+# 🌟 求人情報スクレイピングツール
 
-`main.py` を実行して、`config.py` で定義された求人サイトから情報を取得し、CSV とログに保存するスクリプトです。
+`main.py` を実行して、`config.py` で定義された求人サイトから求人情報を取得し、CSV & ログに保存できるPythonスクリプトです。
 
-## 主な機能
+---
 
-- サイトごとに一覧ページから求人カードを収集し、詳細情報を抽出
-- `config.SITE_CONFIGS` に複数サイト（例: `01intern`, `kyujinbox`）を定義して切り替え可能
-- スクレイピング再開機能（`--resume`）で途中まで取得済みの CSV から処理を再開
-- 取得した全求人情報を `output/{site}_job_listings_YYYYMMDD_HHMMSS.csv` に保存
-- ログを `log/scraping_YYYYMMDD_HHMMSS.log` に保存し、処理状況やエラーを記録
-- ランダムな待機時間（`config.MIN_INTERVAL`〜`config.MAX_INTERVAL` 秒）でアクセス間隔を調整
+## ✨ 特徴
 
-## セットアップ
+- **マルチサイト対応**  
+  サイトごとに一覧ページから求人カードを収集し、詳細情報を自動抽出  
+  `config.SITE_CONFIGS` に複数サイト（例: `01intern`, `kyujinbox`）を定義して切り替え可能
+- **途中再開機能**  
+  `--resume` オプションで、取得済みCSVから処理を再開
+- **自動保存**  
+  取得した求人情報を `output/{site}_job_listings_YYYYMMDD_HHMMSS.csv` に保存
+- **詳細なログ出力**  
+  ログを `log/scraping_YYYYMMDD_HHMMSS.log` に記録し、進捗やエラーを追跡可能
+- **アクセス間隔調整**  
+  ランダムな待機時間（`config.MIN_INTERVAL`〜`config.MAX_INTERVAL`秒）でサーバー負荷を軽減
+
+---
+
+## ⚙️ セットアップ
 
 1. **リポジトリのクローン**
    ```bash
@@ -19,7 +28,7 @@
    cd script
    ```
 
-2. **Python 仮想環境の作成と有効化（推奨）**
+2. **Python仮想環境の作成（推奨）**
    ```bash
    python3 -m venv venv
    source venv/bin/activate
@@ -30,25 +39,68 @@
    pip install requests beautifulsoup4
    ```
 
-## 使い方
+---
+
+## 🚀 使い方
 
 ```bash
-python main.py <site> [--start-page N] [--resume]
+python main.py <site> [--start-page N] [--resume] [--log-level LEVEL]
 ```
 
-- `site`: `config.SITE_CONFIGS` に定義されたキーを指定します（例: `python main.py kyujinbox`）。
-- `--start-page`: スクレイピング開始ページ（既定値 1）。
-- `--resume`: 最新の CSV から件数を算出して再開します。
+**引数:**
 
-処理が完了すると `output/` に CSV が生成されます。失敗や警告は `log/` のログファイルを確認してください。
+- `<site>` : `config.SITE_CONFIGS` に定義されたキーを指定（例: `python main.py kyujinbox`）
+- `--start-page N` : スクレイピング開始ページ番号（デフォルト: 1）
+- `--resume` : 既存のCSVから件数を算出して途中から再開
+- `--log-level LEVEL` : ログ出力レベルを指定（例: `DEBUG`, `INFO`, `WARNING` など）
 
-## 設定のカスタマイズ
+**例:**
 
-`config.py` で以下を調整できます。
+```bash
+# kyujinboxサイトを1ページ目からINFOレベルで取得
+python main.py kyujinbox --log-level INFO
 
-- `SITE_CONFIGS`: 取得対象サイトごとの URL、HTML セレクタ、抽出項目
-- `HEADERS`: リクエストヘッダ（User-Agent など）
-- `MIN_INTERVAL`, `MAX_INTERVAL`: アクセス間隔のランダム待機時間（秒）
-- `MAX_ITEMS`: 最大取得件数（`None` にすると制限なし）
+# 01internサイトを5ページ目からDEBUGレベルで再開
+python main.py 01intern --start-page 5 --resume --log-level DEBUG
+```
 
-サイトを追加したい場合は、新しいキーを `SITE_CONFIGS` に定義し、一覧ページや求人詳細から必要な項目を指定してください。
+**出力:**  
+処理が完了すると `output/` にCSVが生成されます。失敗や警告は `log/` ディレクトリのログファイルをご確認ください。
+
+---
+
+## 📦 実行例
+
+```bash
+# 01internサイトを通常実行（デフォルト: INFOログ）
+python main.py 01intern
+
+# kyujinboxサイトを途中再開＆詳細なDEBUGログで実行
+python main.py kyujinbox --resume --log-level DEBUG
+```
+
+出力ファイル例:
+```
+output/kyujinbox_job_listings_20240101_120000.csv
+log/scraping_20240101_120000.log
+```
+
+---
+
+## 🛠️ 設定のカスタマイズ
+
+`config.py` で以下を柔軟に調整できます。
+
+| 設定項目         | 内容                                                         |
+|------------------|--------------------------------------------------------------|
+| `SITE_CONFIGS`   | サイトごとのURL, HTMLセレクタ, 抽出対象項目                  |
+| `HEADERS`        | リクエストヘッダ（User-Agent等）                             |
+| `MIN_INTERVAL`   | アクセス間隔の最小待機秒数                                   |
+| `MAX_INTERVAL`   | アクセス間隔の最大待機秒数                                   |
+| `MAX_ITEMS`      | 最大取得件数（`None`で制限なし）                             |
+| `LOG_LEVEL`      | デフォルトのログレベル（`INFO`, `DEBUG`など）                |
+
+### サイト追加も簡単！
+新しいサイトを追加する場合は、`SITE_CONFIGS` に新しいキーを定義し、一覧ページや求人詳細から必要な項目を指定してください。
+
+---
