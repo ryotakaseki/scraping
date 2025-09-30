@@ -1,6 +1,0 @@
-import requests
-import config
-
-url = "https://xn--pckua2a7gp15o89zb.com/rd/?uaid=10e3c0fda93223b49df1c349fc2335e3&p=t%2BAK7k0GmMUr0ZRss/MBm7NfS6totjQYy3rGEU/O8Nfw2yhIKweBqyRbp%2BZAziF7BcQUrCpwUIKSmo2go/qx6GidAgfHqBQoe/89nqap1kcbLsuKk/EWhmecSYbnvS88ftpHmhM9oGU%2B81zzicWtXm3R6E4f/LtlWo03trhXQ/umIpVjGAdxiBMasB7M2GkdAPxOb29S9vfbtGnHFCkz/r3WO6lZ44h7Ppy1eQh3Gi/L3G%2Bm6XgRPoJ/jE1z2FUbytMXmozd7FbfFxr9WgvXauctQbcz9XcY7Wxepute8iLUMaffGhBE0eD7m%2Bnz9qZdujwRnIOIQD75uiKYP2b5BfHuR%2Bi3tkWSsHB08x1vRDt6Ql8YRTcSmX/prEeaBmrxakvyLLPWv0izE2/OGTMVt%2Ba1mFInCi7uzBK7pkxkWiBiraphE4JvkPnyILPytkDf2lcbvVpUTUC7f9WdUUrxamrpn7HbASMlvbVPeC64WOkW5BWEdFcr4hzr9LF8BGYX&ph=fdd74ff657cc&phv=1"
-res = requests.get(url, headers=config.HEADERS, timeout=30)
-print(res.text)
