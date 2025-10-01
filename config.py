@@ -47,8 +47,8 @@ SITE_CONFIGS = {
 
 # --- スクレイピング制御設定 (共通) ---
 HEADERS = {"User-Agent": "Mozilla/5.0"}
-MIN_INTERVAL = 1
-MAX_INTERVAL = 5
+MIN_INTERVAL = 3
+MAX_INTERVAL = 10
 MAX_ITEMS = 100
 
 # ログ出力のデフォルトレベル

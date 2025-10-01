@@ -229,27 +229,30 @@ class KyujinboxScraper(BaseScraper):
     def _extract_sections_from_external(self, soup: BeautifulSoup, rules: Optional[Dict] = None) -> Dict[str, str]:
         result = {}
         targets = rules or {}
-        heading_tags = ["h1", "h2", "h3", "h4", "dt", "th", "strong", "p", "div"]
+        heading_tags = {"h1", "h2", "h3", "h4", "h5", "h6"}
 
         for out_key, keywords in targets.items():
-            heading = None
-            for tag in heading_tags:
-                heading = soup.find(tag, string=lambda s: s and any(k in s for k in keywords))
-                if heading:
-                    break
+            # Find a heading tag that contains one of the keywords
+            heading = soup.find(
+                lambda tag: tag.name in heading_tags and any(k in tag.get_text(strip=True) for k in keywords)
+            )
+
             if not heading:
+                self.logger.debug(f"'{out_key}' に対応する見出しが見つかりませんでした。")
                 continue
 
-            content = None
-            for finder in [
-                lambda h: h.find_next(["p", "ul", "ol", "section"]),
-                lambda h: h.find_parent().find_next(["p", "ul", "ol", "section"]) if h.find_parent() else None,
-                lambda h: h.find_next("div"),
-            ]:
-                content = finder(heading)
-                if content and content.get_text(strip=True):
+            # Collect content from subsequent siblings until the next heading
+            content_parts = []
+            for sibling in heading.find_next_siblings():
+                if sibling.name in heading_tags:
                     break
+                # Ensure the sibling has meaningful content
+                text = sibling.get_text(separator=" ", strip=True)
+                if text:
+                    content_parts.append(text)
             
-            if content:
-                result[out_key] = content.get_text(separator=" ", strip=True)
+            if content_parts:
+                result[out_key] = " ".join(content_parts).strip()
+            else:
+                self.logger.debug(f"'{out_key}' の見出し配下で内容が見つかりませんでした。")
         return result

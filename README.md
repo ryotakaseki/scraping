@@ -1,22 +1,17 @@
 # 🌟 求人情報スクレイピングツール
 
-`main.py` を実行して、`config.py` で定義された求人サイトから求人情報を取得し、CSV & ログに保存できるPythonスクリプトです。
+`main.py` を実行して、`config.py` で定義された求人サイトから求人情報を取得し、CSVファイルに保存・追記できるPythonスクリプトです。
 
 ---
 
 ## ✨ 特徴
 
-- **マルチサイト対応**  
-  サイトごとに一覧ページから求人カードを収集し、詳細情報を自動抽出  
-  `config.SITE_CONFIGS` に複数サイト（例: `01intern`, `kyujinbox`）を定義して切り替え可能
-- **途中再開機能**  
-  `--resume` オプションで、取得済みCSVから処理を再開
-- **自動保存**  
-  取得した求人情報を `output/{site}_job_listings_YYYYMMDD_HHMMSS.csv` に保存
-- **詳細なログ出力**  
-  ログを `log/scraping_YYYYMMDD_HHMMSS.log` に記録し、進捗やエラーを追跡可能
-- **アクセス間隔調整**  
-  ランダムな待機時間（`config.MIN_INTERVAL`〜`config.MAX_INTERVAL`秒）でサーバー負荷を軽減
+- **マルチサイト対応**: `config.py` に定義された複数サイトのスクレイピングに対応。
+- **途中再開機能**: `--resume` オプションで、前回の続きから処理を再開。
+- **追記保存**: データを `output/{サイト名}_job_listings.csv` という固定ファイルに追記していくため、データが失われません。
+- **安定性**: ネットワークエラー時に自動でリトライする機能と、文字化けを防止するエンコーディング設定を搭載。
+- **サーバー負荷軽減**: アクセスごとにランダムな待機時間を設けています。
+ 
 
 ---
 
@@ -43,64 +38,56 @@
 
 ## 🚀 使い方
 
-```bash
-python main.py <site> [--start-page N] [--resume] [--log-level LEVEL]
-```
-
-**引数:**
-
-- `<site>` : `config.SITE_CONFIGS` に定義されたキーを指定（例: `python main.py kyujinbox`）
-- `--start-page N` : スクレイピング開始ページ番号（デフォルト: 1）
-- `--resume` : 既存のCSVから件数を算出して途中から再開
-- `--log-level LEVEL` : ログ出力レベルを指定（例: `DEBUG`, `INFO`, `WARNING` など）
-
-**例:**
+コマンドは `python3 main.py --help` で確認できます。
 
 ```bash
-# kyujinboxサイトを1ページ目からINFOレベルで取得
-python main.py kyujinbox --log-level INFO
+usage: main.py [-h] [--start-page N] [--resume] [--log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}] site
 
-# 01internサイトを5ページ目からDEBUGレベルで再開
-python main.py 01intern --start-page 5 --resume --log-level DEBUG
+求人サイトから情報をスクレイピングするツールです。
+
+positional arguments:
+  site                  スクレイピング対象のサイト名を指定します。
+                        利用可能なサイト: 01intern, kyujinbox
+
+options:
+  -h, --help            show this help message and exit
+  --start-page N        スクレイピングを開始するページ番号を指定します。(デフォルト: 1)
+                        --resumeオプションと同時に使用すると、このオプションは無視されます。
+  --resume              処理を再開します。outputフォルダ内の既存のCSVファイルから
+                        取得済みの件数を読み取り、その続きからスクレイピングを開始します。
+                        このオプションを使用すると、--start-pageの値は上書きされます。
+  --log-level {DEBUG,INFO,WARNING,ERROR,CRITICAL}
+                        コンソールとログファイルの出力レベルを指定します。(デフォルト: INFO)
+
 ```
 
-**出力:**  
-処理が完了すると `output/` にCSVが生成されます。失敗や警告は `log/` ディレクトリのログファイルをご確認ください。
-
----
-
-## 📦 実行例
+### 実行例
 
 ```bash
-# 01internサイトを通常実行（デフォルト: INFOログ）
-python main.py 01intern
+# 01internサイトを最初から実行
+python3 main.py 01intern
 
-# kyujinboxサイトを途中再開＆詳細なDEBUGログで実行
-python main.py kyujinbox --resume --log-level DEBUG
-```
-
-出力ファイル例:
-```
-output/kyujinbox_job_listings_20240101_120000.csv
-log/scraping_20240101_120000.log
+# kyujinboxサイトを前回の続きから再開（詳細ログ付き）
+python3 main.py kyujinbox --resume --log-level DEBUG
 ```
 
 ---
 
-## 🛠️ 設定のカスタマイズ
+## 📄 出力
 
-`config.py` で以下を柔軟に調整できます。
-
-| 設定項目         | 内容                                                         |
-|------------------|--------------------------------------------------------------|
-| `SITE_CONFIGS`   | サイトごとのURL, HTMLセレクタ, 抽出対象項目                  |
-| `HEADERS`        | リクエストヘッダ（User-Agent等）                             |
-| `MIN_INTERVAL`   | アクセス間隔の最小待機秒数                                   |
-| `MAX_INTERVAL`   | アクセス間隔の最大待機秒数                                   |
-| `MAX_ITEMS`      | 最大取得件数（`None`で制限なし）                             |
-| `LOG_LEVEL`      | デフォルトのログレベル（`INFO`, `DEBUG`など）                |
-
-### サイト追加も簡単！
-新しいサイトを追加する場合は、`SITE_CONFIGS` に新しいキーを定義し、一覧ページや求人詳細から必要な項目を指定してください。
+- **求人データ**: `output/` ディレクトリに `_job_listings.csv` という名前でサイトごとに作成されます。
+  - 例: `output/kyujinbox_job_listings.csv`
+- **ログ**: `log/` ディレクトリに実行ごとのログファイルが作成されます。
+  - 例: `log/scraping_20251001_120000.log`
 
 ---
+
+
+
+---
+
+## ⚠️ ご注意（免責事項）
+
+- **利用規約の確認**: スクレイピングを実行する前に、対象サイトの**利用規約**や**robots.txt**を必ず確認し、その指示に従ってください。サイトによってはスクレイピングが禁止されている場合があります。
+- **自己責任で利用**: 本ツールを使用したことによるいかなる損害についても、作成者は責任を負いません。常識の範囲内で、自己責任でご利用ください。
+- **仕様変更への対応**: ウェブサイトの仕様変更により、スクリプトが正常に動作しなくなる可能性があります。
