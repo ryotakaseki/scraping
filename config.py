@@ -49,7 +49,7 @@ SITE_CONFIGS = {
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 MIN_INTERVAL = 3
 MAX_INTERVAL = 10
-MAX_ITEMS = 100
+MAX_ITEMS = 200
 
 # ログ出力のデフォルトレベル
 LOG_LEVEL = "INFO"

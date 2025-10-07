@@ -1,4 +1,4 @@
-"""メインのスクレイピング処理を定義するモジュール。"""
+"メインのスクレイピング処理を定義するモジュール。"
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import csv
 import glob
 import logging
 import os
+import time
 from datetime import datetime
 from typing import Dict, List, Optional, Type
 
@@ -77,6 +78,8 @@ def main(
         log_level=log_level,
         default_level=getattr(config, "LOG_LEVEL", None),
     )
+    
+    start_time = time.time()
     logging.info("--- %s のスクレイピング処理を開始します ---", site)
 
     scraper = get_scraper(site)
@@ -120,6 +123,10 @@ def main(
     )
 
     save_to_csv(site, all_job_details, scraper.site_config.get("REQUIRED_FIELDS", []))
+
+    end_time = time.time()
+    duration = end_time - start_time
+    logging.info(f"全処理が完了しました。所要時間: {duration // 60:.0f}分 {duration % 60:.2f}秒")
 
 
 if __name__ == "__main__":
