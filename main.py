@@ -13,12 +13,13 @@ from typing import Dict, List, Optional, Type
 
 import config
 import logging_config
-from scrapers import BaseScraper, InternScraper, KyujinboxScraper
+from scrapers import BaseScraper, InternScraper, KyujinboxScraper, InternshipGuideScraper
 
 # サイト名とスクレイパークラスのマッピング
 SCRAPER_CLASSES: Dict[str, Type[BaseScraper]] = {
     "01intern": InternScraper,
     "kyujinbox": KyujinboxScraper,
+    "internshipguide": InternshipGuideScraper,
 }
 
 def get_scraper(site_name: str) -> Optional[BaseScraper]:
@@ -95,24 +96,30 @@ def main(
         if os.path.exists(resume_file):
             logging.info(f"既存のファイル: {resume_file}")
             try:
-                with open(resume_file, 'r', encoding='utf-8-sig') as f:
+                with open(resume_file, 'r', newline='', encoding='utf-8-sig') as f:
                     reader = csv.reader(f)
-                    # ファイルが空でないか確認
-                    if any(reader):
-                        f.seek(0) # ポインタを先頭に戻す
-                        scraped_count = sum(1 for row in reader if any(row)) - 1
+                    header = next(reader, None)  # ヘッダー行を読み飛ばす
+                    if header:
+                        # データ行の数を正確にカウント
+                        scraped_count = sum(1 for row in reader if any(row))
                     else:
-                        scraped_count = 0
-                scraped_count = max(0, scraped_count) # 念のためマイナスにならないように
-            except (IOError, StopIteration):
-                scraped_count = 0
+                        scraped_count = 0 # ファイルが空かヘッダーのみ
+            except (csv.Error, UnicodeDecodeError) as e:
+                logging.error(f"CSVファイル {resume_file} の読み込みエラー: {e}。ファイルが破損している可能性があるため、処理を中断します。")
+                return
+            except Exception as e:
+                logging.error(f"再開処理中に予期せぬエラーが発生しました: {e}。処理を中断します。")
+                return
 
-            items_per_page = scraper.site_config.get("ITEMS_PER_PAGE", 30)
-            if items_per_page > 0:
-                start_page = (scraped_count // items_per_page) + 1
+            if scraped_count > 0:
+                items_per_page = scraper.site_config.get("ITEMS_PER_PAGE", 30)
+                if items_per_page > 0:
+                    start_page = (scraped_count // items_per_page) + 1
+                else:
+                    start_page = 1
+                logging.info(f"取得済みの件数: {scraped_count}。{start_page}ページ目から再開します。")
             else:
-                start_page = 1
-            logging.info(f"取得済みの件数: {scraped_count}。{start_page}ページ目から再開します。")
+                logging.info("有効なデータが見つからなかったため、最初から開始します。")
         else:
             logging.info("再開できるCSVファイルが見つかりませんでした。最初から開始します。")
 

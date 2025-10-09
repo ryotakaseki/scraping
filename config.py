@@ -43,6 +43,25 @@ SITE_CONFIGS = {
             "対象となる方": ["対象となる方", "応募資格", "求める人物像", "求める人材", "応募要件", "必須条件"],
         },
     },
+    "internshipguide": {
+        "BASE_URL": "https://internshipguide.jp",
+        "TARGET_URL": "https://internshipguide.jp/interns/japanInternList/13?longterm=1",
+        "AJAX_URL": "https://internshipguide.jp/Interns/ajax_japan_interns",
+        "ITEMS_PER_PAGE": 9,
+        "JOB_CARD_TAG": "li",
+        "JOB_CARD_CLASS": "p-company-card",
+        "DETAIL_URL_TAG": "a",
+        "REQUIRED_FIELDS": [
+            "タイトル", "最終更新日", "仕事内容", "応募条件", "職種", 
+            "給与", "勤務期間・時間", "勤務地", "身に付くスキル", "会社名", 
+            "URL", "新卒採用（実施予定）", "求人URL"
+        ],
+        "AJAX_HEADERS": {
+            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "X-Requested-With": "XMLHttpRequest",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        }
+    },
 }
 
 # --- スクレイピング制御設定 (共通) ---
