@@ -105,8 +105,11 @@ def main(
         output_dir = "output"
         resume_file = os.path.join(output_dir, f'{site}_job_listings.csv')
 
-        print(f"CWD: {os.getcwd()}")
-        print(f"Checking for file: {os.path.abspath(resume_file)}")
+        logging.debug(
+            "再開対象ファイルを確認します。cwd=%s path=%s",
+            os.getcwd(),
+            os.path.abspath(resume_file),
+        )
 
         if os.path.exists(resume_file):
             logging.info(f"既存のファイル: {resume_file}")

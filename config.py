@@ -88,32 +88,45 @@ SITE_CONFIGS = {
 }
 
 # --- スクレイピング制御設定 (共通) ---
-HEADERS = {
-    "authority": "internshipguide.jp",
+CHROME_HEADER_PROFILES = [
+    {
+        "user_agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.6422.141 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Not/A)Brand";v="8", "Chromium";v="125", "Google Chrome";v="125"',
+        "sec_ch_ua_platform": '"Windows"',
+        "sec_ch_ua_mobile": "?0",
+    },
+    {
+        "user_agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_5) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/126.0.6478.54 Safari/537.36"
+        ),
+        "sec_ch_ua": '"Not/A)Brand";v="8", "Chromium";v="126", "Google Chrome";v="126"',
+        "sec_ch_ua_platform": '"macOS"',
+        "sec_ch_ua_mobile": "?0",
+    },
+]
+
+BASE_HEADERS = {
     "accept": (
         "text/html,application/xhtml+xml,application/xml;"
         "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,"
         "application/signed-exchange;v=b3;q=0.7"
     ),
     "accept-language": "ja,en-US;q=0.9,en;q=0.8",
-    "cache-control": "max-age=0",
+    "cache-control": "no-cache",
     "dnt": "1",
-    "referer": "https://internshipguide.jp/interns/japanInternList/13?longterm=1",
-    "sec-ch-ua": (
-        '"Google Chrome";v="124", "Chromium";v="124", "Not-A.Brand";v="99"'
-    ),
+    "pragma": "no-cache",
     "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
     "sec-fetch-dest": "document",
     "sec-fetch-mode": "navigate",
-    "sec-fetch-site": "same-origin",
+    "sec-fetch-site": "none",
     "sec-fetch-user": "?1",
     "upgrade-insecure-requests": "1",
-    "user-agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
 }
 MIN_INTERVAL = 3
 MAX_INTERVAL = 10
