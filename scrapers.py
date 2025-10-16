@@ -9,12 +9,15 @@ import math
 import re
 import time
 import random
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse, parse_qsl, urlencode, urlunparse
 from typing import Dict, List, Optional, Tuple
 
 import utils
 import requests
+import config
 from bs4 import BeautifulSoup
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 
 class BaseScraper(abc.ABC):
     """すべてのスクレイパーの基底クラス。共通処理を定義する。"""
@@ -36,6 +39,7 @@ class BaseScraper(abc.ABC):
 
         page = start_page
         skip_items = scraped_count % self.site_config.get("ITEMS_PER_PAGE", 30)
+        consecutive_404_errors = 0
 
         while page <= last_page:
             if max_items is not None and len(all_job_details) >= max_items:
@@ -44,8 +48,14 @@ class BaseScraper(abc.ABC):
 
             list_soup = self._get_soup_for_page(page)
             if not list_soup:
+                consecutive_404_errors += 1
+                if consecutive_404_errors >= 1:
+                    self.logger.warning("ページの取得に失敗しました。処理を終了します。")
+                    break
                 page += 1
                 continue
+            
+            consecutive_404_errors = 0
 
             job_cards = self._find_job_cards(list_soup)
             if not job_cards:
@@ -83,7 +93,13 @@ class BaseScraper(abc.ABC):
         """ページ番号に対応する一覧ページのSoupオブジェクトを返す。"""
         self.logger.info(f"--- {page}ページ目の処理を開始します ---")
         target_url = self._get_page_url(page)
-        list_soup = utils.get_soup(target_url)
+
+        headers = config.HEADERS.copy()
+        if page > 1:
+            referer_url = self._get_page_url(page - 1)
+            headers["Referer"] = referer_url
+
+        list_soup = utils.get_soup(target_url, headers)
         if not list_soup:
             self.logger.error(f"{target_url} の取得に失敗。このページをスキップします。")
             return None
@@ -102,10 +118,9 @@ class BaseScraper(abc.ABC):
 
     def _find_job_cards(self, soup: BeautifulSoup) -> List[BeautifulSoup]:
         """一覧ページから求人カードのリストを見つける。"""
-        return soup.find_all(
-            self.site_config["JOB_CARD_TAG"],
-            class_=self.site_config["JOB_CARD_CLASS"]
-        )
+        tag = self.site_config["JOB_CARD_TAG"]
+        class_name = self.site_config["JOB_CARD_CLASS"]
+        return soup.select(f'{tag}.{class_name}')
 
     def _process_job_card(self, job_card: BeautifulSoup) -> Optional[Dict[str, str]]:
         """単一の求人カードを処理して詳細情報を返す。"""
@@ -193,8 +208,21 @@ class KyujinboxScraper(BaseScraper):
     def _get_page_url(self, page: int) -> str:
         if page == 1:
             return self.site_config["TARGET_URL"]
-        return f"{self.site_config['TARGET_URL']}?pg={page}"
-
+        
+        base_url = self.site_config["TARGET_URL"]
+        
+        # URLの解析
+        parts = list(urlparse(base_url))
+        query = dict(parse_qsl(parts[4]))
+        
+        # pageパラメータを更新
+        query['page'] = page
+        
+        # 新しいクエリ文字列を生成
+        parts[4] = urlencode(query)
+        
+        # 新しいURLを組み立て
+        return urlunparse(parts)
     def _get_pagination_info(self) -> Tuple[Optional[int], Optional[int]]:
         list_soup = utils.get_soup(self.site_config["TARGET_URL"])
         if not list_soup:
@@ -272,124 +300,153 @@ class KyujinboxScraper(BaseScraper):
                 self.logger.debug(f"'{out_key}' の見出し配下で内容が見つかりませんでした。")
         return result
 
-class InternshipGuideScraper(BaseScraper):
-    """internshipguide.jp用のスクレイパー。"""
+
+class InfraScraper(BaseScraper):
+    """in-fra.jp用のスクレイパー。"""
+
+    def __init__(self, site_name: str, site_config: Dict):
+        super().__init__(site_name, site_config)
 
     def _get_pagination_info(self) -> Tuple[Optional[int], Optional[int]]:
-        """総アイテム数と最終ページ番号を取得する。"""
         list_soup = utils.get_soup(self.site_config["TARGET_URL"])
         if not list_soup:
             return None, None
 
-        total_items_text_element = list_soup.find("span", class_="c-breadcrumbs-list__label--current")
+        soup = list_soup
+
+        total_items_text_element = soup.find("span", class_="hit-count")
         if not total_items_text_element:
             self.logger.error("総件数の取得に失敗しました。")
             return None, None
 
-        total_items_text = total_items_text_element.text.strip()
-        match = re.search(r'\((\d[\d,]*)\)', total_items_text)
+        match = re.search(r'(\d+)', total_items_text_element.text)
         if not match:
             self.logger.error("総件数のテキストから数値の抽出に失敗しました。")
             return None, None
 
-        total_items = int(match.group(1).replace(',', ''))
-        items_per_page = self.site_config.get("ITEMS_PER_PAGE", 9)
+        total_items = int(match.group(1))
+        items_per_page = self.site_config.get("ITEMS_PER_PAGE", 50)
         last_page = math.ceil(total_items / items_per_page)
         self.logger.info(f"総求人件数: {total_items}件, 最終ページ: {last_page}")
         return total_items, last_page
 
-    def _get_soup_for_page(self, page: int) -> Optional[BeautifulSoup]:
-        """AJAXリクエストを送信して、ページの内容をSoupとして取得する。"""
-        self.logger.info(f"--- {page}ページ目の処理を開始します ---")
-        
-        payload = {
-            "page": page,
-            "type": "normal",
-            "classId": 1003,
-            "sort": 0,
-            "targetPrefecture": 13,
-            "longterm": 1
-        }
-        
-        try:
-            response = requests.post(
-                self.site_config["AJAX_URL"], 
-                data=payload, 
-                headers=self.site_config.get("AJAX_HEADERS"), 
-                timeout=15
-            )
-            response.raise_for_status()
-            
-            if not response.text.strip():
-                self.logger.info(f"ページ {page} のコンテンツが空です。最終ページと判断します。")
-                return None
-            
-            return BeautifulSoup(response.text, 'html.parser')
+    def _get_page_url(self, page: int) -> str:
+        if page == 1:
+            return self.site_config["TARGET_URL"]
+        return f'{self.site_config["TARGET_URL"]}&page={page}'
 
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"AJAXリクエストに失敗しました (ページ {page}): {e}")
+    def _process_job_card(self, job_card: BeautifulSoup) -> Optional[Dict[str, str]]:
+        job_id = job_card.get('data-id')
+        if not job_id:
+            self.logger.warning("求人ID(data-id)が見つかりません。")
             return None
 
+        detail_url = f"https://www.in-fra.jp/long-internships/{job_id}"
+        job_details = self.get_job_details(detail_url, job_card)
+        if job_details:
+            job_details.setdefault("求人URL", detail_url)
+        return job_details
+
     def get_job_details(self, detail_url: str, job_card: BeautifulSoup) -> Optional[Dict[str, str]]:
-        """詳細ページからすべての項目を抽出し、改行をカンマに変換する。"""
         soup = utils.get_soup(detail_url)
         if not soup:
             self.logger.error(f"詳細ページ ({detail_url}) の取得に失敗しました。")
             return None
 
-        details: Dict[str, str] = {}
+        details = {}
 
-        # Helper to extract text, replacing newlines with commas
-        def get_text_single_line(selector, attrs=None):
-            element = soup.find(selector, attrs=attrs)
+        def get_single_line_text(element):
             if not element:
-                return None
-            # Use get_text with a unique separator, then replace that separator
-            text = element.get_text(separator='[BR]', strip=True)
-            return text.replace('[BR]', ', ')
+                return 'N/A'
+            return element.get_text(separator=', ', strip=True)
 
-        # Helper for dd tags, replacing newlines with commas
-        def get_dd_text_single_line(dt_text):
-            dt_tag = soup.find('dt', string=dt_text)
-            if not (dt_tag and dt_tag.find_next_sibling('dd')):
-                return None
+        title_elem = soup.find('h1', class_='intern-detail-mv-title-text')
+        details['タイトル'] = get_single_line_text(title_elem)
+
+        company_elem = soup.find('h2', class_='intern-detail-desc-name')
+        details['会社名'] = get_single_line_text(company_elem)
+
+        task_elem = soup.find('div', class_='intern-detail-task')
+        if task_elem and task_elem.find('p'):
+            details['このインターンですること'] = get_single_line_text(task_elem.find('p'))
+
+        # 「その他のインターン条件」を取得
+        other_conditions_section = soup.find('div', class_='intern-detail-others')
+        if other_conditions_section:
+            for item in other_conditions_section.find_all('div', class_='intern-detail-others-list'):
+                label_elem = item.find('div', class_='intern-detail-others-list-label')
+                content_elem = item.find('div', class_='intern-detail-others-list-content')
+                if label_elem and content_elem:
+                    key = get_single_line_text(label_elem)
+                    value = get_single_line_text(content_elem)
+                    details[key] = value
+
+        return details
+
+
+class RenewCareerScraper(BaseScraper):
+    """renew-career.com用のスクレイパー。"""
+
+    def _get_pagination_info(self) -> Tuple[Optional[int], Optional[int]]:
+        list_soup = utils.get_soup(self.site_config["TARGET_URL"])
+        if not list_soup:
+            return None, None
+
+        total_items_text_element = list_soup.find("p", class_="font-semibold text-sm text-gray-800")
+        if not total_items_text_element:
+            self.logger.error("総件数の取得に失敗しました。")
+            return None, None
+
+        total_items_text = total_items_text_element.text.strip()
+        self.logger.info(f"Total items text: {total_items_text}")
+        match = re.search(r'(\d{1,3}(,\d{3})*)', total_items_text)
+        if not match:
+            self.logger.error("総件数のテキストから数値の抽出に失敗しました。")
+            return None, None
+
+        total_items = int(match.group(1).replace(',', ''))
+        items_per_page = self.site_config.get("ITEMS_PER_PAGE", 20)
+        last_page = math.ceil(total_items / items_per_page)
+        self.logger.info(f"総求人件数: {total_items}件, 最終ページ: {last_page}")
+        return total_items, last_page
+
+    def _get_page_url(self, page: int) -> str:
+        """ページ番号に応じた一覧ページのURLを返す。"""
+        if page == 1:
+            return self.site_config["TARGET_URL"]
+        return f'{self.site_config["TARGET_URL"]}&page={page}'
+
+
+    def _process_job_card(self, job_card: BeautifulSoup) -> Optional[Dict[str, str]]:
+        """単一の求人カードを処理して詳細情報を返す。"""
+        detail_link_tag = job_card.find("a")
+        if not detail_link_tag or not detail_link_tag.has_attr('href'):
+            self.logger.warning("詳細ページへのリンクが見つかりません。")
+            return None
+
+        detail_url = detail_link_tag['href']
+
+        job_details = self.get_job_details(detail_url, job_card)
+        if job_details:
+            job_details.setdefault("求人URL", detail_url)
+        return job_details
+
+    def get_job_details(self, detail_url: str, job_card: BeautifulSoup) -> Optional[Dict[str, str]]:
+        """詳細ページから求人情報を抽出する。"""
+        self.logger.warning(f"詳細ページ ({detail_url}) の取得を試みます。")
+        soup = utils.get_soup(detail_url)
+        if not soup:
+            self.logger.error(f"詳細ページ ({detail_url}) の取得に失敗しました。")
+            return None
+
+        # 現状では詳細ページが取得できないため、一覧ページから取得できる情報のみを返す
+        details: Dict[str, str] = {}
+        title_elem = job_card.find("h3", class_="p-recruit-card__title")
+        if title_elem:
+            details["タイトル"] = title_elem.text.strip()
             
-            dd_tag = dt_tag.find_next_sibling('dd')
-            # Special handling for URL to not replace <wbr>
-            if dt_text == 'URL':
-                return dd_tag.get_text(separator='', strip=True)
-
-            text = dd_tag.get_text(separator='[BR]', strip=True)
-            return text.replace('[BR]', ', ')
-
-        details['タイトル'] = get_text_single_line('p', attrs={'class': 'notsmartphone c-title'})
-        
-        timestamp = get_text_single_line('p', attrs={'class': 'page-meta__time-stamp'})
-        if timestamp and ':' in timestamp:
-            details['最終更新日'] = timestamp.split(':', 1)[1].strip()
-        else:
-            details['最終更新日'] = timestamp
-
-        details['仕事内容'] = get_text_single_line('p', attrs={'class': 'job-description__detail'})
-        details['応募条件'] = get_text_single_line('p', attrs={'class': 'qualification__detail'})
-        
-        # Extract from definition list
-        details['職種'] = get_dd_text_single_line('職種')
-        details['給与'] = get_dd_text_single_line('給与')
-        details['勤務期間・時間'] = get_dd_text_single_line('勤務期間・時間')
-        details['勤務地'] = get_dd_text_single_line('勤務地')
-        details['身に付くスキル'] = get_dd_text_single_line('身に付くスキル')
-        details['会社名'] = get_dd_text_single_line('会社名')
-        details['URL'] = get_dd_text_single_line('URL') # Uses special handling inside the helper
-        details['新卒採用（実施予定）'] = get_dd_text_single_line('新卒採用（実施予定）')
-
-        # The company name is also in the h1 tag, which might be more reliable
-        if not details.get('会社名'):
-             details['会社名'] = get_text_single_line('h1', attrs={'class': 'page-meta__title'})
-
-        # Clean up None values
-        for key, value in details.items():
-            if value is None:
-                details[key] = 'N/A'
-
+        company_elem = job_card.find("p", class_="p-recruit-card__company")
+        if company_elem:
+            details["会社名"] = company_elem.text.strip()
+            
         return details

@@ -43,29 +43,78 @@ SITE_CONFIGS = {
             "対象となる方": ["対象となる方", "応募資格", "求める人物像", "求める人材", "応募要件", "必須条件"],
         },
     },
-    "internshipguide": {
-        "BASE_URL": "https://internshipguide.jp",
-        "TARGET_URL": "https://internshipguide.jp/interns/japanInternList/13?longterm=1",
-        "AJAX_URL": "https://internshipguide.jp/Interns/ajax_japan_interns",
-        "ITEMS_PER_PAGE": 9,
-        "JOB_CARD_TAG": "li",
-        "JOB_CARD_CLASS": "p-company-card",
+    "infra": {
+        "BASE_URL": "https://www.in-fra.jp",
+        "TARGET_URL": "https://www.in-fra.jp/long-internships?occupation%5B0%5D=3&prefecture%5B0%5D=13&area%5B0%5D=1&area%5B1%5D=2&area%5B2%5D=3&area%5B3%5D=4&area%5B4%5D=5&area%5B5%5D=12&order=recommended",
+        "ITEMS_PER_PAGE": 50,
+        "JOB_CARD_TAG": "a",
+        "JOB_CARD_CLASS": "js-card-link",
+        "REQUIRED_FIELDS": ["会社名", "タイトル"],
+        "FIELD_ORDER": ["会社名", "場所", "アクセス", "交通費", "奨学金", "給与", "タイトル", "このインターンですること", "求人URL"]
+    },
+    "kyujinbox_sales": {
+        "BASE_URL": "https://xn--pckua2a7gp15o89zb.com",
+        "TARGET_URL": "https://xn--pckua2a7gp15o89zb.com/%E5%96%B6%E6%A5%AD%E3%81%AE%E4%BB%95%E4%BA%8B-%E6%9D%B1%E4%BA%AC%E9%83%BD?e=4",
+        "ITEMS_PER_PAGE": 30,
+        "JOB_CARD_TAG": "section",
+        "JOB_CARD_CLASS": "p-result_card",
         "DETAIL_URL_TAG": "a",
+        "DETAIL_URL_CLASS": "p-result_title_link",
+        "EXTRACTION_TARGETS": {
+            "会社名": {"tag": "p", "class": "p-result_company"},
+            "勤務地": {"tag": "li", "class": "p-result_area"},
+            "給与": {"tag": "li", "class": "p-result_pay"},
+            "雇用形態": {"tag": "li", "class": "p-result_employType"},
+            "求人詳細": {"tag": "p", "class": "p-result_lines s-result_switch_snipet is-hide"}
+        },
         "REQUIRED_FIELDS": [
-            "タイトル", "最終更新日", "仕事内容", "応募条件", "職種", 
-            "給与", "勤務期間・時間", "勤務地", "身に付くスキル", "会社名", 
-            "URL", "新卒採用（実施予定）", "求人URL"
+            "会社名", "勤務地", "給与", "雇用形態",
+            "求人詳細", "仕事内容", "対象となる方", "掲載元", "求人URL"
         ],
-        "AJAX_HEADERS": {
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "X-Requested-With": "XMLHttpRequest",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-        }
+        "EXTERNAL_SECTION_RULES": {
+            "仕事内容": ["仕事内容", "業務内容", "仕事の内容", "業務詳細", "業務内容・仕事の特色"],
+            "対象となる方": ["対象となる方", "応募資格", "求める人物像", "求める人材", "応募要件", "必須条件"],
+        },
+    },
+    "renew-career": {
+        "BASE_URL": "https://renew-career.com",
+        "TARGET_URL": "https://renew-career.com/search?keyword=&occupation_type%5B%5D=2&sort=",
+        "ITEMS_PER_PAGE": 20,
+        "JOB_CARD_TAG": "div",
+        "JOB_CARD_CLASS": "relative.mb-4.mx-3.md\\:mx-0.md\\:p-3.border-2.border-gray-100.rounded-lg.group.hover\\:bg-gray-50.transition-colors",
+        "DETAIL_URL_TAG": "a",
+        "REQUIRED_FIELDS": ["タイトル", "会社名", "求人URL"],
     },
 }
 
 # --- スクレイピング制御設定 (共通) ---
-HEADERS = {"User-Agent": "Mozilla/5.0"}
+HEADERS = {
+    "authority": "internshipguide.jp",
+    "accept": (
+        "text/html,application/xhtml+xml,application/xml;"
+        "q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,"
+        "application/signed-exchange;v=b3;q=0.7"
+    ),
+    "accept-language": "ja,en-US;q=0.9,en;q=0.8",
+    "cache-control": "max-age=0",
+    "dnt": "1",
+    "referer": "https://internshipguide.jp/interns/japanInternList/13?longterm=1",
+    "sec-ch-ua": (
+        '"Google Chrome";v="124", "Chromium";v="124", "Not-A.Brand";v="99"'
+    ),
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": '"Windows"',
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-user": "?1",
+    "upgrade-insecure-requests": "1",
+    "user-agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+}
 MIN_INTERVAL = 3
 MAX_INTERVAL = 10
 MAX_ITEMS = 200
