@@ -6,18 +6,15 @@ from __future__ import annotations
 import abc
 import logging
 import math
+import random
 import re
 import time
-import random
-from urllib.parse import urljoin, urlparse, parse_qsl, urlencode, urlunparse
 from typing import Dict, List, Optional, Tuple
+from urllib.parse import parse_qsl, urlencode, urljoin, urlparse, urlunparse
 
-import utils
-import requests
 import config
+import utils
 from bs4 import BeautifulSoup
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 
 class BaseScraper(abc.ABC):
     """すべてのスクレイパーの基底クラス。共通処理を定義する。"""
@@ -94,12 +91,14 @@ class BaseScraper(abc.ABC):
         self.logger.info(f"--- {page}ページ目の処理を開始します ---")
         target_url = self._get_page_url(page)
 
-        headers = config.HEADERS.copy()
+        header_overrides: Dict[str, str] = {}
         if page > 1:
             referer_url = self._get_page_url(page - 1)
-            headers["Referer"] = referer_url
+            header_overrides["Referer"] = referer_url
+        else:
+            header_overrides["Referer"] = self.base_url
 
-        list_soup = utils.get_soup(target_url, headers)
+        list_soup = utils.get_soup(target_url, header_overrides)
         if not list_soup:
             self.logger.error(f"{target_url} の取得に失敗。このページをスキップします。")
             return None
@@ -398,7 +397,7 @@ class RenewCareerScraper(BaseScraper):
             return None, None
 
         total_items_text = total_items_text_element.text.strip()
-        self.logger.info(f"Total items text: {total_items_text}")
+        self.logger.debug("総件数テキストを取得しました raw=%s", total_items_text)
         match = re.search(r'(\d{1,3}(,\d{3})*)', total_items_text)
         if not match:
             self.logger.error("総件数のテキストから数値の抽出に失敗しました。")
@@ -433,7 +432,7 @@ class RenewCareerScraper(BaseScraper):
 
     def get_job_details(self, detail_url: str, job_card: BeautifulSoup) -> Optional[Dict[str, str]]:
         """詳細ページから求人情報を抽出する。"""
-        self.logger.warning(f"詳細ページ ({detail_url}) の取得を試みます。")
+        self.logger.info("詳細ページの取得を試みます url=%s", detail_url)
         soup = utils.get_soup(detail_url)
         if not soup:
             self.logger.error(f"詳細ページ ({detail_url}) の取得に失敗しました。")
